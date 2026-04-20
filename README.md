@@ -1,7 +1,5 @@
 # Фитнес-трекер
 
-Проект расширен под лабораторные работы с PostgreSQL и MongoDB для варианта 14.
-
 Реализованные endpoint-ы:
 
 - `POST /v1/auth/register`
@@ -23,14 +21,7 @@
 docker compose up --build
 ```
 После запуска API будет доступен по адресу `http://localhost:8080`.
-PostgreSQL будет доступен на порту `5432`, MongoDB - на порту `27017`.
-
-Для полной переинициализации PostgreSQL и MongoDB из файлов проекта можно удалить volume-ы и поднять контейнеры заново:
-
-```bash
-docker compose down -v
-docker compose up --build
-```
+Порт PostgreSQL - `5432`, MongoDB - `27017`.
 
 - `schema.sql` - создание схемы БД, таблиц и индексов
 - `data.sql` - тестовые данные
@@ -69,8 +60,6 @@ docker compose up --build
 - `workouts.user_id` ссылается на `users.user_id`;
 - `workouts.exercises.exercise_id` ссылается на `exercises.exercise_id`;
 - `exercises.created_by` ссылается на `users.user_id`.
-
-Такой вариант выбран потому, что пользователь и упражнение являются самостоятельными сущностями, а состав конкретной тренировки чаще всего читается вместе с тренировкой.
 
 Подробное описание модели находится в `schema_design.md`.
 
