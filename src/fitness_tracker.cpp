@@ -14,11 +14,14 @@
 #include <userver/crypto/hash.hpp>
 #include <userver/crypto/random.hpp>
 #include <userver/formats/common/type.hpp>
+#include <userver/formats/bson/inline.hpp>
 #include <userver/formats/json.hpp>
 #include <userver/formats/json/serialize.hpp>
 #include <userver/http/content_type.hpp>
 #include <userver/server/handlers/http_handler_base.hpp>
 #include <userver/server/http/http_status.hpp>
+#include <userver/storages/mongo/component.hpp>
+#include <userver/storages/mongo/pool.hpp>
 #include <userver/storages/postgres/cluster.hpp>
 #include <userver/storages/postgres/component.hpp>
 
@@ -27,7 +30,9 @@ namespace fitness_tracker_service {
 namespace {
 
 namespace formats_json = userver::formats::json;
+namespace formats_bson = userver::formats::bson;
 namespace http = userver::server::http;
+namespace mongo = userver::storages::mongo;
 namespace pg = userver::storages::postgres;
 
 struct PublicUser {
@@ -262,6 +267,24 @@ class ApiHandlerBase : public userver::server::handlers::HttpHandlerBase {
 
  private:
   pg::ClusterPtr pg_cluster_;
+};
+
+class MongoApiHandlerBase : public ApiHandlerBase {
+ public:
+  MongoApiHandlerBase(
+      const userver::components::ComponentConfig& config,
+      const userver::components::ComponentContext& component_context)
+      : ApiHandlerBase(config, component_context),
+        mongo_pool_(
+            component_context
+                .FindComponent<userver::components::Mongo>("mongo-db-1")
+                .GetPool()) {}
+
+ protected:
+  const mongo::PoolPtr& GetMongoPool() const { return mongo_pool_; }
+
+ private:
+  mongo::PoolPtr mongo_pool_;
 };
 
 class RegisterHandler final : public ApiHandlerBase {
@@ -531,6 +554,80 @@ class ExerciseListHandler final : public ApiHandlerBase {
   }
 };
 
+class MongoExerciseCreateHandler final : public MongoApiHandlerBase {
+ public:
+  static constexpr std::string_view kName = "handler-mongo-exercise-create";
+
+  using MongoApiHandlerBase::MongoApiHandlerBase;
+
+  std::string HandleRequestThrow(
+      const http::HttpRequest& request,
+      userver::server::request::RequestContext&) const override {
+    return ExecuteSafely(request, [&] {
+      const auto auth_user = RequireAuth(request);
+      const auto json = ParseJsonBody(request);
+      const auto name = GetRequiredStringField(json, "name");
+      const auto muscle_group = GetRequiredStringField(json, "muscle_group");
+      const auto calories_per_minute =
+          GetPositiveIntField(json, "calories_per_minute");
+      const auto description = json["description"].As<std::string>("");
+
+      auto exercises = GetMongoPool()->GetCollection("exercises");
+      exercises.InsertOne(formats_bson::MakeDoc(
+          "name", name,
+          "muscle_group", muscle_group,
+          "calories_per_minute", calories_per_minute,
+          "description", description,
+          "created_by", auth_user.id,
+          "source", "api"));
+
+      formats_json::ValueBuilder builder;
+      builder["name"] = name;
+      builder["muscle_group"] = muscle_group;
+      builder["calories_per_minute"] = calories_per_minute;
+      builder["description"] = description;
+      builder["created_by"] = auth_user.id;
+      builder["storage"] = "mongodb";
+      return JsonResponse(request, builder, http::HttpStatus::kCreated);
+    });
+  }
+};
+
+class MongoExerciseListHandler final : public MongoApiHandlerBase {
+ public:
+  static constexpr std::string_view kName = "handler-mongo-exercise-list";
+
+  using MongoApiHandlerBase::MongoApiHandlerBase;
+
+  std::string HandleRequestThrow(
+      const http::HttpRequest& request,
+      userver::server::request::RequestContext&) const override {
+    return ExecuteSafely(request, [&] {
+      auto collection = GetMongoPool()->GetCollection("exercises");
+      auto cursor = collection.Find(formats_bson::MakeDoc());
+
+      formats_json::ValueBuilder exercises(
+          userver::formats::common::Type::kArray);
+      for (const auto& doc : cursor) {
+        formats_json::ValueBuilder exercise;
+        exercise["exercise_id"] = doc["exercise_id"].As<int>(0);
+        exercise["name"] = doc["name"].As<std::string>("");
+        exercise["muscle_group"] = doc["muscle_group"].As<std::string>("");
+        exercise["calories_per_minute"] =
+            doc["calories_per_minute"].As<int>(0);
+        exercise["description"] = doc["description"].As<std::string>("");
+        exercise["created_by"] = doc["created_by"].As<int>(0);
+        exercises.PushBack(exercise.ExtractValue());
+      }
+
+      formats_json::ValueBuilder builder;
+      builder["storage"] = "mongodb";
+      builder["exercises"] = exercises.ExtractValue();
+      return JsonResponse(request, builder);
+    });
+  }
+};
+
 class WorkoutCreateHandler final : public ApiHandlerBase {
  public:
   static constexpr std::string_view kName = "handler-workout-create";
@@ -791,11 +888,14 @@ void AppendFitnessTracker(userver::components::ComponentList& component_list) {
   component_list.Append<UserSearchHandler>();
   component_list.Append<ExerciseCreateHandler>();
   component_list.Append<ExerciseListHandler>();
+  component_list.Append<MongoExerciseCreateHandler>();
+  component_list.Append<MongoExerciseListHandler>();
   component_list.Append<WorkoutCreateHandler>();
   component_list.Append<WorkoutExerciseAddHandler>();
   component_list.Append<WorkoutHistoryHandler>();
   component_list.Append<WorkoutStatsHandler>();
   component_list.Append<userver::components::Postgres>("postgres-db-1");
+  component_list.Append<userver::components::Mongo>("mongo-db-1");
   component_list.Append<userver::clients::dns::Component>();
 }
 

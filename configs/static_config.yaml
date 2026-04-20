@@ -106,6 +106,18 @@ components_manager:
             task_processor: main-task-processor
             url_trailing_slash: strict-match
 
+        handler-mongo-exercise-create:
+            path: /v1/mongo/exercises
+            method: POST
+            task_processor: main-task-processor
+            url_trailing_slash: strict-match
+
+        handler-mongo-exercise-list:
+            path: /v1/mongo/exercises
+            method: GET
+            task_processor: main-task-processor
+            url_trailing_slash: strict-match
+
         postgres-db-1:
             dbconnection: $dbconnection
             dbconnection#env: DB_CONNECTION
@@ -113,6 +125,20 @@ components_manager:
             dns_resolver: async
             sync-start: true
             connlimit_mode: manual
+
+        mongo-db-1:
+            dbconnection: $mongo-connection
+            dbconnection#env: MONGO_CONNECTION
+            appname: fitness-tracker-service
+            conn_timeout: 2s
+            so_timeout: 10s
+            queue_timeout: 1s
+            initial_size: 2
+            max_size: 16
+            idle_limit: 8
+            connecting_limit: 2
+            stats_verbosity: terse
+            dns_resolver: async
 
         dns-client:
             fs-task-processor: fs-task-processor

@@ -4,7 +4,7 @@ project(fitness_tracker_service CXX)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(DownloadUserver)
 
-find_package(userver COMPONENTS core postgresql QUIET)
+find_package(userver COMPONENTS core postgresql mongo QUIET)
 if(NOT userver_FOUND)
   download_userver(TRY_DIR third_party/userver VERSION 2.8)
 endif()
@@ -15,7 +15,7 @@ add_library(${PROJECT_NAME}_objs OBJECT
     src/fitness_tracker.hpp
     src/fitness_tracker.cpp
 )
-target_link_libraries(${PROJECT_NAME}_objs PUBLIC userver::postgresql)
+target_link_libraries(${PROJECT_NAME}_objs PUBLIC userver::postgresql userver::mongo)
 
 add_executable(${PROJECT_NAME} src/main.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_objs)

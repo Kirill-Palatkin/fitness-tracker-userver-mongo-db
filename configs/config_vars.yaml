@@ -7,3 +7,4 @@ is-testing: false
 server-port: 8080
 
 dbconnection: 'postgresql://fitness_tracker_user:password@localhost:5432/fitness_tracker_service_db_1'
+mongo-connection: 'mongodb://localhost:27017/fitness_tracker_mongo'
